@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titanic Data Analysis | Portfolio</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="logo">Titanic EDA & Prediction</div>
+            <ul class="nav-links">
+                <li><a href="#preprocessing">Data Cleaning</a></li>
+                <li><a href="#findings">Research Questions</a></li>
+                <li><a href="#heatmap">Heatmap</a></li>
+                <li><a href="#predictor">Predictor</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Predicting Survival on the Titanic</h1>
+            <p>A comprehensive Exploratory Data Analysis (EDA) and predictive modeling project based on the historical RMS Titanic passenger manifest.</p>
+            <a href="#findings" class="cta-button">View Findings</a>
+        </div>
+    </header>
+
+    <section id="preprocessing" class="section-container">
+        <div class="section-header">
+            <h2>Data Cleaning & Feature Engineering</h2>
+            <p>Raw data is rarely ready for analysis. Here is how the dataset was prepared using Python and Pandas.</p>
+        </div>
+        <div class="grid-2">
+            <div class="info-card">
+                <h3>Data Cleaning</h3>
+                <ul>
+                    <li><strong>Cabin Column:</strong> Dropped entirely due to 687 missing values (too many to impute reliably).</li>
+                    <li><strong>Age Imputation:</strong> Replaced missing ages (177 rows) with the median age specifically calculated by gender (Female: 27.0, Male: 29.0).</li>
+                    <li><strong>Embarked:</strong> Filled the 2 missing port values with the mode (most common port).</li>
+                </ul>
+            </div>
+            <div class="info-card">
+                <h3>Feature Engineering</h3>
+                <ul>
+                    <li><strong>FamilySize:</strong> Created by adding SibSp (siblings/spouses), Parch (parents/children), plus 1 for the passenger.</li>
+                    <li><strong>IsAlone:</strong> A binary flag set to 1 if FamilySize equals 1.</li>
+                    <li><strong>FareClass & AgeGroup:</strong> Segmented continuous numerical variables into discrete bins to identify categorical trends.</li>
+                    <li><strong>Sex_num:</strong> Mapped 'female' to 1 and 'male' to 0 to process gender in the correlation matrix.</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="findings" class="section-container bg-light">
+        <div class="section-header">
+            <h2>Answering the 4 Research Questions</h2>
+            <p>Visualizing the processed data to uncover the demographics of survival.</p>
+        </div>
+        
+        <div class="findings-grid">
+            <div class="finding-card">
+                <h3>Q1: Does passenger class affect the survival rate?</h3>
+                <p class="finding-text">Yes. First-class passengers had a massive advantage due to cabin proximity to lifeboats.</p>
+                <div class="data-bar-row"><div class="data-label">1st Class</div><div class="bar-wrap"><div class="bar bg-gold" style="width: 63%;">63.0%</div></div></div>
+                <div class="data-bar-row"><div class="data-label">2nd Class</div><div class="bar-wrap"><div class="bar bg-silver" style="width: 47.3%;">47.3%</div></div></div>
+                <div class="data-bar-row"><div class="data-label">3rd Class</div><div class="bar-wrap"><div class="bar bg-bronze" style="width: 24.2%;">24.2%</div></div></div>
+            </div>
+
+            <div class="finding-card">
+                <h3>Q2: Does gender affect the survival rate?</h3>
+                <p class="finding-text">This was the strongest predictor. The "women and children first" protocol was strictly enforced.</p>
+                <div class="data-bar-row"><div class="data-label">Female</div><div class="bar-wrap"><div class="bar bg-female" style="width: 74%;">74.2%</div></div></div>
+                <div class="data-bar-row"><div class="data-label">Male</div><div class="bar-wrap"><div class="bar bg-male" style="width: 19%;">18.9%</div></div></div>
+            </div>
+
+            <div class="finding-card">
+                <h3>Q3: How does fare paid correlate with survival?</h3>
+                <p class="finding-text">Passengers who survived paid more than double, on average, compared to those who perished.</p>
+                <div class="data-bar-row"><div class="data-label">Survived</div><div class="bar-wrap"><div class="bar bg-green" style="width: 100%;">£ 48.40</div></div></div>
+                <div class="data-bar-row"><div class="data-label">Perished</div><div class="bar-wrap"><div class="bar bg-red" style="width: 45%;">£ 22.12</div></div></div>
+            </div>
+
+            <div class="finding-card">
+                <h3>Q4: What is the survival rate by age group?</h3>
+                <p class="finding-text">Children were heavily prioritized, while the elderly (61+) struggled the most to evacuate.</p>
+                <div class="data-bar-row"><div class="data-label">Child (0-12)</div><div class="bar-wrap"><div class="bar bg-blue" style="width: 58%;">58.0%</div></div></div>
+                <div class="data-bar-row"><div class="data-label">Mature (41-60)</div><div class="bar-wrap"><div class="bar bg-blue" style="width: 39.1%;">39.1%</div></div></div>
+                <div class="data-bar-row"><div class="data-label">Adult (19-40)</div><div class="bar-wrap"><div class="bar bg-blue" style="width: 36%;">36.0%</div></div></div>
+                <div class="data-bar-row"><div class="data-label">Elder (61-80)</div><div class="bar-wrap"><div class="bar bg-blue" style="width: 22.7%;">22.7%</div></div></div>
+            </div>
+        </div>
+    </section>
+
+    <section id="heatmap" class="section-container">
+        <div class="section-header">
+            <h2>Feature Correlation Matrix</h2>
+            <p>Hover over the cells to read the plain-language explanation of how these features mathematically interact.</p>
+        </div>
+        
+        <div class="heatmap-wrapper">
+            <div id="heatmap-container"></div>
+            <div id="info-panel" class="heatmap-info">
+                Hover over any cell in the grid to see what the correlation means.
+            </div>
+        </div>
+    </section>
+
+    <section id="predictor" class="section-container bg-light">
+        <div class="section-header">
+            <h2>Interactive Survival Predictor</h2>
+            <p>A decision-tree simulator powered by the historical dataset probabilities.</p>
+        </div>
+        
+        <div id="app">
+            <div class="header-row">
+                <span id="step-ind">Step 1 of 4</span>
+                <button id="restart-btn" class="btn-text" onclick="restart()" style="display:none;">⟲ Start over</button>
+            </div>
+            <div class="progress-container">
+                <div class="progress-labels">
+                    <span>Estimated survival</span>
+                    <span id="prob-text" style="font-weight:600;">38.4% (Baseline)</span>
+                </div>
+                <div class="progress-track"><div id="prob-bar"></div></div>
+                <div id="breadcrumbs"></div>
+            </div>
+            <div id="question-area">
+                <p id="q-text"></p>
+                <p id="q-note"></p>
+                <div id="choices"></div>
+            </div>
+            <div id="result-area" style="display:none;">
+                <div class="gauge-container">
+                    <svg viewBox="0 0 160 160" width="100%" height="100%">
+                        <circle class="gauge-bg" cx="80" cy="80" r="70"/>
+                        <circle id="gauge" cx="80" cy="80" r="70"/>
+                    </svg>
+                    <div class="gauge-center">
+                        <div id="res-pct">0%</div>
+                        <div class="gauge-label">Survival</div>
+                    </div>
+                </div>
+                <p id="verdict"></p>
+                <p id="profile-txt"></p>
+                <div id="ctx-note"></div>
+                <button class="btn-primary" onclick="restart()">Test Another Passenger</button>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="footer-content">
+            <p><strong>Data Analysis & Frontend Portfolio</strong></p>
+            <div class="tech-tags">
+                <span class="tech-tag">Python</span>
+                <span class="tech-tag">Pandas</span>
+                <span class="tech-tag">JavaScript</span>
+                <span class="tech-tag">CSS3</span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
