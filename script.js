@@ -1,23 +1,23 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-        // ==========================================
-    // 0. MOBILE MENU TOGGLE LOGIC
-    // ==========================================
+// 0. MOBILE MENU TOGGLE LOGIC
     const mobileMenu = document.getElementById('mobile-menu');
     const navLinks = document.getElementById('nav-links');
 
     if (mobileMenu && navLinks) {
-        mobileMenu.addEventListener('click', () => {
+        mobileMenu.addEventListener('click', (e) => {
+            e.preventDefault();
             navLinks.classList.toggle('active');
         });
 
-        // Close the menu automatically when a link is clicked
         navLinks.addEventListener('click', (e) => {
             if(e.target.tagName === 'A') {
                 navLinks.classList.remove('active');
             }
         });
     }
+
+
     // ==========================================
     // 1. CORRELATION HEATMAP
     // ==========================================
