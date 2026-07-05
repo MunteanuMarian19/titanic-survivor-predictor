@@ -1,23 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-// 0. MOBILE MENU TOGGLE LOGIC
-    const mobileMenu = document.getElementById('mobile-menu');
-    const navLinks = document.getElementById('nav-links');
-
-    if (mobileMenu && navLinks) {
-        mobileMenu.addEventListener('click', (e) => {
-            e.preventDefault();
-            navLinks.classList.toggle('active');
-        });
-
-        navLinks.addEventListener('click', (e) => {
-            if(e.target.tagName === 'A') {
-                navLinks.classList.remove('active');
-            }
-        });
-    }
-
-
     // ==========================================
     // 1. CORRELATION HEATMAP
     // ==========================================
@@ -79,7 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function corrColor(v) {
-      // Coolwarm palette: blue=negative, white=zero, red=positive
       const stops = [[-1,[59,76,192]],[-0.5,[140,172,221]],[0,[245,245,245]],[0.5,[214,96,77]],[1,[180,4,38]]];
       for (let i = 0; i < stops.length - 1; i++) {
         const [v0, c0] = stops[i], [v1, c1] = stops[i+1];
@@ -92,11 +73,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderHeatmap() {
+        const container = document.getElementById('heatmap-container');
+        if (!container) return;
         const tbl = document.createElement('table');
         tbl.style.borderCollapse = 'collapse';
         tbl.style.margin = '0 auto';
 
-        // Header row
         const hdr = document.createElement('tr');
         hdr.appendChild(document.createElement('td'));
         cols.forEach(col => {
@@ -107,7 +89,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         tbl.appendChild(hdr);
 
-        // Data rows
         cols.forEach(row => {
             const tr = document.createElement('tr');
             const lbl = document.createElement('td');
@@ -128,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const key = row + '-' + col;
                     const note = notes[key];
                     const panel = document.getElementById('info-panel');
+                    if (!panel) return;
                     if (row === col) {
                         panel.innerHTML = `<strong>${row} ↔ ${row} (1.00):</strong> A column always correlates perfectly with itself. This diagonal is a mathematical rule — it tells you nothing about the data.`;
                     } else {
@@ -138,159 +120,157 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 td.addEventListener('mouseleave', () => {
                     td.style.boxShadow = 'none';
-                    document.getElementById('info-panel').textContent = 'Hover over any cell in the grid to see what the correlation means.';
+                    const panel = document.getElementById('info-panel');
+                    if (panel) panel.textContent = 'Hover over any cell in the grid to see what the correlation means.';
                 });
                 tr.appendChild(td);
             });
             tbl.appendChild(tr);
         });
-        document.getElementById('heatmap-container').appendChild(tbl);
+        container.appendChild(tbl);
     }
     renderHeatmap();
 
 
     // ==========================================
     // 2. INTERACTIVE PREDICTOR
-    // Survival probabilities computed directly from the Titanic CSV
-    // using the same cleaning steps as the Python notebook:
-    //   - Cabin dropped
-    //   - Age filled with gender-specific median
-    //   - Embarked filled with mode
-    //   - FamilySize = SibSp + Parch + 1
-    //   - FamGroup: Alone=1, Small=2–4, Large=5+
-    //   - AgeGroup bins: [0,12,18,40,60,80]
+    // All numbers below are computed directly from the Titanic CSV using
+    // the same cleaning steps as the Python notebook (Cabin dropped, Age
+    // filled with gender-specific median, Embarked filled with mode,
+    // FamilySize = SibSp + Parch + 1, FamGroup: Alone=1, Small=2-4, Large=5+).
     //
-    // Where a group has fewer than 3 passengers, the next broader
-    // level is used as a fallback (L3 → L2 → L1) to avoid
-    // unreliable single-passenger rates distorting the predictor.
+    // Each entry is {r: survival rate %, n: number of matching passengers}.
+    // A `null` means zero passengers in the dataset match that exact group.
     // ==========================================
 
-    // L1: Gender only (df.groupby('Sex')['Survived'].mean() * 100)
-    // Verified against CSV: female=74.2, male=18.9
-    const L1_prob = {
-        female: 74.2,
-        male:   18.9
+    const MIN_SAMPLE = 3; // below this, a group's rate is considered unreliable
+
+    const L1_data = {
+        female: {r:74.2,n:314},
+        male: {r:18.9,n:577},
     };
 
-    // L2: Gender × Pclass
-    // Verified against CSV — all 6 values exact.
-    const L2_prob = {
-        female: { 1: 96.8, 2: 92.1, 3: 50.0 },
-        male:   { 1: 36.9, 2: 15.7, 3: 13.5 }
+    const L2_data = {
+        female: {
+            1: {r:96.8,n:94},
+            2: {r:92.1,n:76},
+            3: {r:50.0,n:144},
+        },
+        male: {
+            1: {r:36.9,n:122},
+            2: {r:15.7,n:108},
+            3: {r:13.5,n:347},
+        },
     };
 
-    // L3: Gender × Pclass × AgeGroup
-    // Values verified against CSV.
-    // Cells marked [fallback=L2] had < 3 passengers in the data
-    // and use the L2 rate for that sex+class combination.
-    const L3_prob = {
+    const L3_data = {
         female: {
             1: {
-                'Child (0-12)':        96.8,  // [fallback=L2] only 1 passenger in data
-                'Teen (13-18)':       100.0,  // 10 passengers — exact
-                'Adult (19-40)':       98.2,  // 57 passengers — exact
-                'Older adult (41-60)': 95.8,  // 24 passengers — exact
-                'Elder (61-80)':       96.8   // [fallback=L2] only 2 passengers
+                'Child (0-12)': {r:0.0,n:1},
+                'Teen (13-18)': {r:100.0,n:10},
+                'Adult (19-40)': {r:98.2,n:57},
+                'Older adult (41-60)': {r:95.8,n:24},
+                'Elder (61-80)': {r:100.0,n:2},
             },
             2: {
-                'Child (0-12)':       100.0,  // 8 passengers — exact
-                'Teen (13-18)':       100.0,  // 6 passengers — exact
-                'Adult (19-40)':       91.8,  // 49 passengers — exact
-                'Older adult (41-60)': 84.6,  // 13 passengers — exact
-                'Elder (61-80)':       92.1   // [fallback=L2] 0 passengers in this group
+                'Child (0-12)': {r:100.0,n:8},
+                'Teen (13-18)': {r:100.0,n:6},
+                'Adult (19-40)': {r:91.8,n:49},
+                'Older adult (41-60)': {r:84.6,n:13},
+                'Elder (61-80)': null,
             },
             3: {
-                'Child (0-12)':        47.8,  // 23 passengers — exact
-                'Teen (13-18)':        55.0,  // 20 passengers — exact
-                'Adult (19-40)':       53.3,  // 92 passengers — exact
-                'Older adult (41-60)':  0.0,  // 8 passengers — exact (0 survivors)
-                'Elder (61-80)':       50.0   // [fallback=L2] only 1 passenger
-            }
+                'Child (0-12)': {r:47.8,n:23},
+                'Teen (13-18)': {r:55.0,n:20},
+                'Adult (19-40)': {r:53.3,n:92},
+                'Older adult (41-60)': {r:0.0,n:8},
+                'Elder (61-80)': {r:100.0,n:1},
+            },
         },
         male: {
             1: {
-                'Child (0-12)':       100.0,  // 3 passengers — exact
-                'Teen (13-18)':        50.0,  // 2 passengers — using actual rate (1 survived of 2)
-                'Adult (19-40)':       40.3,  // 67 passengers — exact
-                'Older adult (41-60)': 34.2,  // 38 passengers — exact
-                'Elder (61-80)':        8.3   // 12 passengers — exact
+                'Child (0-12)': {r:100.0,n:3},
+                'Teen (13-18)': {r:50.0,n:2},
+                'Adult (19-40)': {r:40.3,n:67},
+                'Older adult (41-60)': {r:34.2,n:38},
+                'Elder (61-80)': {r:8.3,n:12},
             },
             2: {
-                'Child (0-12)':       100.0,  // 9 passengers — exact
-                'Teen (13-18)':         0.0,  // 6 passengers — exact (0 survivors)
-                'Adult (19-40)':        8.3,  // 72 passengers — exact
-                'Older adult (41-60)':  5.6,  // 18 passengers — exact
-                'Elder (61-80)':       33.3   // 3 passengers — exact
+                'Child (0-12)': {r:100.0,n:9},
+                'Teen (13-18)': {r:0.0,n:6},
+                'Adult (19-40)': {r:8.3,n:72},
+                'Older adult (41-60)': {r:5.6,n:18},
+                'Elder (61-80)': {r:33.3,n:3},
             },
             3: {
-                'Child (0-12)':        36.0,  // 25 passengers — exact
-                'Teen (13-18)':         7.7,  // 26 passengers — exact
-                'Adult (19-40)':       12.8,  // 265 passengers — exact
-                'Older adult (41-60)':  7.4,  // 27 passengers — exact
-                'Elder (61-80)':        0.0   // 4 passengers — exact (0 survivors)
-            }
-        }
+                'Child (0-12)': {r:36.0,n:25},
+                'Teen (13-18)': {r:7.7,n:26},
+                'Adult (19-40)': {r:12.8,n:265},
+                'Older adult (41-60)': {r:7.4,n:27},
+                'Elder (61-80)': {r:0.0,n:4},
+            },
+        },
     };
 
-    // L4: Gender × Pclass × AgeGroup × FamilyGroup
-    // FamilyGroup: Alone=FamilySize of 1, Small=2–4, Large=5+
-    // Cells marked [fallback] use the L3 rate for that sex+class+age group.
-    const L4_prob = {
+    const L4_data = {
         female: {
             1: {
-                'Child (0-12)':        { Alone: 96.8,  Small: 96.8,  Large: 96.8  }, // [fallback=L2] 1 passenger total
-                'Teen (13-18)':        { Alone: 100.0, Small: 100.0, Large: 100.0 }, // exact / L3 fallback
-                'Adult (19-40)':       { Alone: 100.0, Small: 96.7,  Large: 100.0 }, // exact
-                'Older adult (41-60)': { Alone: 87.5,  Small: 100.0, Large: 95.8  }, // exact / L3 fallback
-                'Elder (61-80)':       { Alone: 96.8,  Small: 96.8,  Large: 96.8  }  // [fallback=L2] 2 passengers total
+                'Child (0-12)': { Alone: null, Small: {r:0.0,n:1}, Large: null },
+                'Teen (13-18)': { Alone: {r:100.0,n:1}, Small: {r:100.0,n:8}, Large: {r:100.0,n:1} },
+                'Adult (19-40)': { Alone: {r:100.0,n:24}, Small: {r:96.7,n:30}, Large: {r:100.0,n:3} },
+                'Older adult (41-60)': { Alone: {r:87.5,n:8}, Small: {r:100.0,n:16}, Large: null },
+                'Elder (61-80)': { Alone: {r:100.0,n:1}, Small: {r:100.0,n:1}, Large: null },
             },
             2: {
-                'Child (0-12)':        { Alone: 100.0, Small: 100.0, Large: 100.0 }, // exact / L3 fallbacks
-                'Teen (13-18)':        { Alone: 100.0, Small: 100.0, Large: 100.0 }, // exact / L3 fallbacks
-                'Adult (19-40)':       { Alone: 91.7,  Small: 91.7,  Large: 91.8  }, // exact / L3 fallback
-                'Older adult (41-60)': { Alone: 83.3,  Small: 83.3,  Large: 84.6  }, // exact / L3 fallback
-                'Elder (61-80)':       { Alone: 92.1,  Small: 92.1,  Large: 92.1  }  // [fallback=L2] 0 passengers
+                'Child (0-12)': { Alone: null, Small: {r:100.0,n:8}, Large: null },
+                'Teen (13-18)': { Alone: {r:100.0,n:2}, Small: {r:100.0,n:4}, Large: null },
+                'Adult (19-40)': { Alone: {r:91.7,n:24}, Small: {r:91.7,n:24}, Large: {r:100.0,n:1} },
+                'Older adult (41-60)': { Alone: {r:83.3,n:6}, Small: {r:83.3,n:6}, Large: {r:100.0,n:1} },
+                'Elder (61-80)': { Alone: null, Small: null, Large: null },
             },
             3: {
-                'Child (0-12)':        { Alone: 47.8,  Small: 75.0,  Large: 10.0  }, // exact / L3 fallback (Alone=1 pax)
-                'Teen (13-18)':        { Alone: 63.6,  Small: 42.9,  Large: 55.0  }, // exact / L3 fallback
-                'Adult (19-40)':       { Alone: 60.9,  Small: 57.1,  Large: 9.1   }, // exact
-                'Older adult (41-60)': { Alone: 0.0,   Small: 0.0,   Large: 0.0   }, // exact (0 survivors in all subgroups)
-                'Elder (61-80)':       { Alone: 50.0,  Small: 50.0,  Large: 50.0  }  // [fallback=L2] 1 passenger total
-            }
+                'Child (0-12)': { Alone: {r:100.0,n:1}, Small: {r:75.0,n:12}, Large: {r:10.0,n:10} },
+                'Teen (13-18)': { Alone: {r:63.6,n:11}, Small: {r:42.9,n:7}, Large: {r:50.0,n:2} },
+                'Adult (19-40)': { Alone: {r:60.9,n:46}, Small: {r:57.1,n:35}, Large: {r:9.1,n:11} },
+                'Older adult (41-60)': { Alone: {r:0.0,n:1}, Small: {r:0.0,n:3}, Large: {r:0.0,n:4} },
+                'Elder (61-80)': { Alone: {r:100.0,n:1}, Small: null, Large: null },
+            },
         },
         male: {
             1: {
-                'Child (0-12)':        { Alone: 100.0, Small: 100.0, Large: 100.0 }, // exact / L3 fallback
-                'Teen (13-18)':        { Alone: 50.0,  Small: 50.0,  Large: 50.0  }, // L3 fallback (2 pax, no subgroup data)
-                'Adult (19-40)':       { Alone: 39.1,  Small: 45.0,  Large: 40.3  }, // exact / L3 fallback (Large=1 pax)
-                'Older adult (41-60)': { Alone: 30.0,  Small: 38.9,  Large: 34.2  }, // exact / L3 fallback
-                'Elder (61-80)':       { Alone: 11.1,  Small: 8.3,   Large: 8.3   }  // exact / L3 fallback
+                'Child (0-12)': { Alone: null, Small: {r:100.0,n:3}, Large: null },
+                'Teen (13-18)': { Alone: null, Small: {r:50.0,n:2}, Large: null },
+                'Adult (19-40)': { Alone: {r:39.1,n:46}, Small: {r:45.0,n:20}, Large: {r:0.0,n:1} },
+                'Older adult (41-60)': { Alone: {r:30.0,n:20}, Small: {r:38.9,n:18}, Large: null },
+                'Elder (61-80)': { Alone: {r:11.1,n:9}, Small: {r:0.0,n:2}, Large: {r:0.0,n:1} },
             },
             2: {
-                'Child (0-12)':        { Alone: 100.0, Small: 100.0, Large: 100.0 }, // exact / L3 fallbacks
-                'Teen (13-18)':        { Alone: 0.0,   Small: 0.0,   Large: 0.0   }, // exact / L3 fallbacks
-                'Adult (19-40)':       { Alone: 10.0,  Small: 4.5,   Large: 8.3   }, // exact / L3 fallback
-                'Older adult (41-60)': { Alone: 7.7,   Small: 0.0,   Large: 5.6   }, // exact / L3 fallback
-                'Elder (61-80)':       { Alone: 33.3,  Small: 33.3,  Large: 33.3  }  // exact / L3 fallbacks
+                'Child (0-12)': { Alone: null, Small: {r:100.0,n:9}, Large: null },
+                'Teen (13-18)': { Alone: {r:0.0,n:6}, Small: null, Large: null },
+                'Adult (19-40)': { Alone: {r:10.0,n:50}, Small: {r:4.5,n:22}, Large: null },
+                'Older adult (41-60)': { Alone: {r:7.7,n:13}, Small: {r:0.0,n:5}, Large: null },
+                'Elder (61-80)': { Alone: {r:33.3,n:3}, Small: null, Large: null },
             },
             3: {
-                'Child (0-12)':        { Alone: 36.0,  Small: 100.0, Large: 6.2   }, // exact / L3 fallback (Alone=1 pax)
-                'Teen (13-18)':        { Alone: 14.3,  Small: 0.0,   Large: 0.0   }, // exact
-                'Adult (19-40)':       { Alone: 12.6,  Small: 16.7,  Large: 0.0   }, // exact
-                'Older adult (41-60)': { Alone: 8.7,   Small: 0.0,   Large: 7.4   }, // exact / L3 fallback
-                'Elder (61-80)':       { Alone: 0.0,   Small: 0.0,   Large: 0.0   }  // exact (0 survivors in all subgroups)
-            }
-        }
+                'Child (0-12)': { Alone: {r:0.0,n:1}, Small: {r:100.0,n:8}, Large: {r:6.2,n:16} },
+                'Teen (13-18)': { Alone: {r:14.3,n:14}, Small: {r:0.0,n:8}, Large: {r:0.0,n:4} },
+                'Adult (19-40)': { Alone: {r:12.6,n:222}, Small: {r:16.7,n:36}, Large: {r:0.0,n:7} },
+                'Older adult (41-60)': { Alone: {r:8.7,n:23}, Small: {r:0.0,n:4}, Large: null },
+                'Elder (61-80)': { Alone: {r:0.0,n:4}, Small: null, Large: null },
+            },
+        },
     };
 
-    // Maps the human-readable family choice to the L4 key
     const familyKey = {
         'Alone':              'Alone',
         'Small family (2-4)': 'Small',
         'Large family (5+)':  'Large'
     };
 
+    const genderNotes = {
+        'Female': 'Called to lifeboats first under the "women and children first" evacuation protocol.',
+        'Male':   'Generally expected to step aside for women and children, sharply reducing lifeboat access.'
+    };
     const classNotes = {
         1: 'Best cabins — upper deck, steps from lifeboats, crew priority.',
         2: 'Mid-ship — reasonable access to exits.',
@@ -325,25 +305,89 @@ document.addEventListener('DOMContentLoaded', () => {
         return '#ef4444';
     }
 
-    // ─── THIS WAS THE CRITICAL BUG ───────────────────────────────────────────
-    // The old code was:
-    //   if (!sel.cls) return L2_prob[s] ? {1: L2_prob[s][1], 2: ...}[1] || 38.4 : 38.4;
-    // This created an object and immediately indexed it with [1], which always
-    // returned the 1st Class rate (96.8% for female, 36.9% for male) instead of
-    // the sex-only rate. So selecting Female jumped the bar to 96.8% instead of 74.2%.
+    // ─────────────────────────────────────────────────────────────────────
+    // CASCADING RESOLVER
+    // Tries the most specific group the user has selected so far. If that
+    // group has fewer than MIN_SAMPLE passengers in the real data (or zero),
+    // it steps back to a broader group automatically, and reports exactly
+    // what was dropped so the UI can explain it honestly.
     //
-    // Fix: added L1_prob constant above, and changed this line to: return L1_prob[s]
-    // ─────────────────────────────────────────────────────────────────────────
-    function getInterimProb() {
-        if (!sel.sex) return 38.4;                              // No selection yet → overall baseline
+    // targetLevel: how many questions have been answered (0 to 4)
+    //   0 = nothing selected yet      -> overall baseline
+    //   1 = sex only                  -> L1
+    //   2 = sex + class                -> L2
+    //   3 = sex + class + age          -> L3
+    //   4 = sex + class + age + family -> L4 (full profile)
+    // ─────────────────────────────────────────────────────────────────────
+    function resolve(targetLevel) {
+        if (targetLevel === 0) {
+            return { rate: 38.4, count: 891, usedLevel: 0, requestedLevel: 0, fallback: false, dropped: [] };
+        }
+
         const s = sel.sex === 'Female' ? 'female' : 'male';
-        if (!sel.cls) return L1_prob[s];                       // Sex selected only → L1 rate (74.2% / 18.9%)
-        const c = sel.cls === '1st Class' ? 1 : sel.cls === '2nd Class' ? 2 : 3;
-        if (!sel.age) return L2_prob[s][c];                    // Sex + Class → L2 rate
-        const a = sel.age;
-        if (!sel.fam) return L3_prob[s][c][a];                 // Sex + Class + Age → L3 rate
-        const f = familyKey[sel.fam];
-        return L4_prob[s][c][a][f];                            // All 4 selected → L4 final rate
+        const c = sel.cls ? (sel.cls === '1st Class' ? 1 : sel.cls === '2nd Class' ? 2 : 3) : null;
+        const a = sel.age || null;
+        const f = sel.fam ? familyKey[sel.fam] : null;
+
+        const chain = [];
+        if (targetLevel >= 4 && c && a && f) {
+            chain.push({ level: 4, node: L4_data[s]?.[c]?.[a]?.[f], dropped: [] });
+        }
+        if (targetLevel >= 3 && c && a) {
+            chain.push({ level: 3, node: L3_data[s]?.[c]?.[a], dropped: ['family size'] });
+        }
+        if (targetLevel >= 2 && c) {
+            chain.push({ level: 2, node: L2_data[s]?.[c], dropped: ['age group', 'family size'] });
+        }
+        chain.push({ level: 1, node: L1_data[s], dropped: ['class', 'age group', 'family size'] });
+
+        for (const cand of chain) {
+            if (cand.node && cand.node.n >= MIN_SAMPLE) {
+                return {
+                    rate: cand.node.r,
+                    count: cand.node.n,
+                    usedLevel: cand.level,
+                    requestedLevel: targetLevel,
+                    fallback: cand.level < targetLevel,
+                    dropped: cand.dropped
+                };
+            }
+        }
+        // Should never reach here since L1 always has 300+ passengers per group
+        return { rate: 38.4, count: 891, usedLevel: 0, requestedLevel: targetLevel, fallback: true, dropped: ['everything'] };
+    }
+
+    function droppedToText(dropped) {
+        if (dropped.length === 0) return '';
+        if (dropped.length === 1) return dropped[0];
+        return dropped.slice(0, -1).join(', ') + ' and ' + dropped[dropped.length - 1];
+    }
+
+    function levelDescription(level, s, c, a) {
+        // Builds a short label like "Female, 2nd Class" describing what WAS used
+        const parts = [];
+        if (level >= 1) parts.push(sel.sex);
+        if (level >= 2) parts.push(sel.cls);
+        if (level >= 3) parts.push(sel.age);
+        return parts.join(', ');
+    }
+
+    // Ensures the fallback note element exists, creating it once via JS
+    // (no HTML/CSS file edits needed).
+    function ensureFallbackNoteEl() {
+        let el = document.getElementById('fallback-note');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'fallback-note';
+            el.style.cssText = 'display:none; font-size:0.85rem; line-height:1.5; background:#fffbeb; border-left:4px solid #f59e0b; color:#92400e; padding:0.9rem 1rem; border-radius:8px; margin-bottom:1rem; text-align:left;';
+            const ctxNote = document.getElementById('ctx-note');
+            if (ctxNote && ctxNote.parentNode) {
+                ctxNote.parentNode.insertBefore(el, ctxNote.nextSibling); // insert AFTER (below) Data context
+            } else {
+                document.getElementById('result-area').appendChild(el);
+            }
+        }
+        return el;
     }
 
     function updateBar(p, label) {
@@ -397,7 +441,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBreadcrumb();
         step++;
         if (step < 4) {
-            updateBar(getInterimProb(), 'Current estimate');
+            const r = resolve(step);
+            updateBar(r.rate, 'Current estimate');
             renderStep();
         } else {
             showResult();
@@ -410,7 +455,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('restart-btn').style.display = 'block';
         document.getElementById('step-ind').textContent = 'Final Result';
 
-        const p = getInterimProb();
+        const result = resolve(4);
+        const p = result.rate;
         updateBar(p, 'Final probability');
 
         setTimeout(() => {
@@ -430,9 +476,28 @@ document.addEventListener('DOMContentLoaded', () => {
             `${sel.sex}  •  ${sel.cls}  •  ${sel.age}  •  ${sel.fam}`;
         document.getElementById('ctx-note').innerHTML =
             `<strong>Data context</strong><br><br>` +
+            `<strong>Gender:</strong> ${genderNotes[sel.sex] || ''}<br>` +
             `<strong>Class:</strong> ${classNotes[c]}<br>` +
             `<strong>Age:</strong> ${ageNotes[sel.age] || ''}<br>` +
             `<strong>Family:</strong> ${familyNotes[sel.fam] || ''}`;
+
+        // ── Fallback note: only shown when the exact 4-answer profile
+        // didn't have enough matching passengers, and a broader group
+        // was used instead. This is why the % sometimes doesn't move
+        // after the last answer — it's being honest about small samples.
+        const noteEl = ensureFallbackNoteEl();
+        if (result.fallback) {
+            const usedDesc = levelDescription(result.usedLevel);
+            const droppedText = droppedToText(result.dropped);
+            noteEl.innerHTML =
+                `<strong>⚠ Limited data note:</strong> Only a handful of passengers (or none) match ` +
+                `your exact combination. This estimate is instead based on <strong>${result.count} similar passengers` +
+                `</strong> (${usedDesc}) — the Titanic records don't have enough people matching the ${droppedText} ` +
+                `you selected to calculate a reliable rate at that level.`;
+            noteEl.style.display = 'block';
+        } else {
+            noteEl.style.display = 'none';
+        }
     }
 
     window.restart = function() {
@@ -442,6 +507,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('restart-btn').style.display = 'none';
         document.getElementById('breadcrumbs').textContent = '';
         document.getElementById('gauge').style.strokeDashoffset = 440;
+        const noteEl = document.getElementById('fallback-note');
+        if (noteEl) noteEl.style.display = 'none';
         updateBar(38.4, 'Baseline — all 891 passengers');
         renderStep();
     };
