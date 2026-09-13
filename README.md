@@ -1,4 +1,5 @@
-🚢 Titanic Survival Analysis & Interactive Predictor
+🚢 Titanic Survival Analysis & Interactive Predictor:
+
 A full exploratory data analysis of the Titanic passenger manifest, built in Python, extended into an interactive, presentation-ready web app in HTML/CSS/JavaScript.
 The project asks one question: did a passenger's chances of survival depend on who they were — gender, class, age, ticket price, family size? The notebook answers it with real statistics; the web app lets anyone explore the answer for themselves.
 🔗 Live demo: add your GitHub Pages / hosting link here
